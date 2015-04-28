@@ -130,13 +130,13 @@ func (drv *DBDriver) IsValid() bool {
 func OpenDBFromDBConf(conf *DBConf) (*sql.DB, error) {
 	db, err := sql.Open(conf.Driver.Name, conf.Driver.OpenStr)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("connecting to DB: %s", err)
 	}
 
 	// if a postgres schema has been specified, apply it
 	if conf.Driver.Name == "postgres" && conf.PgSchema != "" {
 		if _, err := db.Exec("SET search_path TO " + conf.PgSchema); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("setting postgres search_path: %s", err)
 		}
 	}
 
