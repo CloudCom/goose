@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"github.com/cloudcom/goose/lib/goose"
 	"log"
+	"net/url"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -37,6 +39,24 @@ func statusRun(cmd *Command, args ...string) {
 		log.Fatal(e)
 	}
 
+	// we depend on time parsing, so make sure it's enabled with the mysql driver
+	if conf.Driver.Name == "mysql" {
+		i := strings.Index(conf.Driver.OpenStr, "?")
+		if i == -1 {
+			i = len(conf.Driver.OpenStr)
+			conf.Driver.OpenStr = conf.Driver.OpenStr + "?"
+		}
+		i++
+
+		q, err := url.ParseQuery(conf.Driver.OpenStr[i:])
+		if err != nil {
+			log.Fatal(err)
+		}
+		q.Set("parseTime", "true")
+
+		conf.Driver.OpenStr = conf.Driver.OpenStr[:i] + q.Encode()
+	}
+
 	db, e := goose.OpenDBFromDBConf(conf)
 	if e != nil {
 		log.Fatal("couldn't open DB:", e)
@@ -58,8 +78,8 @@ func statusRun(cmd *Command, args ...string) {
 
 func printMigrationStatus(db *sql.DB, version int64, script string) {
 	var row goose.MigrationRecord
-	q := fmt.Sprintf("SELECT tstamp, is_applied FROM goose_db_version WHERE version_id=%d ORDER BY tstamp DESC LIMIT 1", version)
-	e := db.QueryRow(q).Scan(&row.TStamp, &row.IsApplied)
+	q := "SELECT tstamp, is_applied FROM goose_db_version WHERE version_id=? ORDER BY tstamp DESC LIMIT 1"
+	e := db.QueryRow(q, version).Scan(&row.TStamp, &row.IsApplied)
 
 	if e != nil && e != sql.ErrNoRows {
 		log.Fatal(e)
