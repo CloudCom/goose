@@ -1,4 +1,4 @@
-# goose
+# goose [![Build Status](https://travis-ci.org/CloudCom/goose.svg?branch=master)](https://travis-ci.org/CloudCom/goose) [![Coverage Status](https://coveralls.io/repos/CloudCom/goose/badge.svg)](https://coveralls.io/r/CloudCom/goose)
 
 goose is a database migration tool.
 
