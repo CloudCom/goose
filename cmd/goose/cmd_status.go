@@ -3,12 +3,13 @@ package main
 import (
 	"database/sql"
 	"fmt"
-	"github.com/cloudcom/goose/lib/goose"
 	"log"
 	"net/url"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/CloudCom/goose/lib/goose"
 )
 
 var statusCmd = &Command{
