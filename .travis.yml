@@ -6,6 +6,8 @@ go:
   - tip
 
 before_install:
+  - gomvpkg -from github.com/CloudCom/goose -to github.com/cloudcom/goose
+  - cd ../../cloudcom/goose
   # install linting tools
   - go get github.com/golang/lint/golint
   - go get golang.org/x/tools/cmd/vet
