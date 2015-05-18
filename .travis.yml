@@ -30,3 +30,7 @@ after_success:
   - golint ./...
   # check for potentially complex functions
   - gocyclo -over 15 .
+  - |
+    if [[ "$TRAVIS_PULL_REQUEST" == "false" ]] && [[ "$TRAVIS_BRANCH" == "master" ]]; then
+      go list ./... | xargs -n 1 -I{} curl http://godoc.org/-/refresh -d path={}
+    fi
