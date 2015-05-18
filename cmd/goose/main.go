@@ -3,11 +3,10 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/cloudcom/goose/lib/goose"
 	"os"
 	"strings"
 	"text/template"
-
-	"github.com/CloudCom/goose/lib/goose"
 )
 
 // global options. available to any subcommands.

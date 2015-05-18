@@ -2,9 +2,8 @@ package main
 
 import (
 	"fmt"
+	"github.com/cloudcom/goose/lib/goose"
 	"log"
-
-	"github.com/CloudCom/goose/lib/goose"
 )
 
 var dbVersionCmd = &Command{
