@@ -105,7 +105,7 @@ import (
 	"encoding/gob"
 
 	_ "{{.Import}}"
-	"github.com/cloudcom/goose/lib/goose"
+	"github.com/CloudCom/goose/lib/goose"
 )
 
 func main() {

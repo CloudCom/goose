@@ -1,8 +1,9 @@
 package main
 
 import (
-	"github.com/cloudcom/goose/lib/goose"
 	"log"
+
+	"github.com/CloudCom/goose/lib/goose"
 )
 
 var redoCmd = &Command{
