@@ -379,8 +379,7 @@ func FinalizeMigration(conf *DBConf, txn *sql.Tx, direction bool, v int64) error
 	return txn.Commit()
 }
 
-var goMigrationTemplate = template.Must(template.New("goose.go-migration").Parse(`
-package main
+var goMigrationTemplate = template.Must(template.New("goose.go-migration").Parse(`package main
 
 import (
 	"database/sql"
@@ -397,8 +396,7 @@ func Down_{{ . }}(txn *sql.Tx) {
 }
 `))
 
-var sqlMigrationTemplate = template.Must(template.New("goose.sql-migration").Parse(`
--- +goose Up
+var sqlMigrationTemplate = template.Must(template.New("goose.sql-migration").Parse(`-- +goose Up
 -- SQL in section 'Up' is executed when this migration is applied
 
 

@@ -96,8 +96,7 @@ func runGoMigration(conf *DBConf, path string, version int64, direction bool) er
 // this gets linked against the substituted versions of the user-supplied
 // scripts in order to execute a migration via `go run`
 //
-var goMigrationDriverTemplate = template.Must(template.New("goose.go-driver").Parse(`
-package main
+var goMigrationDriverTemplate = template.Must(template.New("goose.go-driver").Parse(`package main
 
 import (
 	"log"
