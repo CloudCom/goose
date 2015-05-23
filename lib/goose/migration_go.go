@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"text/template"
 )
 
 type templateData struct {
@@ -90,47 +89,3 @@ func runGoMigration(conf *DBConf, path string, version int64, direction bool) er
 
 	return nil
 }
-
-//
-// template for the main entry point to a go-based migration.
-// this gets linked against the substituted versions of the user-supplied
-// scripts in order to execute a migration via `go run`
-//
-var goMigrationDriverTemplate = template.Must(template.New("goose.go-driver").Parse(`package main
-
-import (
-	"log"
-	"bytes"
-	"encoding/gob"
-
-	_ "{{.Import}}"
-	"github.com/CloudCom/goose/lib/goose"
-)
-
-func main() {
-
-	var conf goose.DBConf
-	buf := bytes.NewBuffer({{ .Conf }})
-	if err := gob.NewDecoder(buf).Decode(&conf); err != nil {
-		log.Fatal("gob.Decode - ", err)
-	}
-
-	db, err := goose.OpenDBFromDBConf(&conf)
-	if err != nil {
-		log.Fatal("failed to open DB:", err)
-	}
-	defer db.Close()
-
-	txn, err := db.Begin()
-	if err != nil {
-		log.Fatal("db.Begin:", err)
-	}
-
-	{{ .Func }}(txn)
-
-	err = goose.FinalizeMigration(&conf, txn, {{ .Direction }}, {{ .Version }})
-	if err != nil {
-		log.Fatal("Commit() failed:", err)
-	}
-}
-`))

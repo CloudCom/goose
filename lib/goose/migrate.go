@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -18,6 +19,22 @@ var (
 	ErrTableDoesNotExist = errors.New("table does not exist")
 	ErrNoPreviousVersion = errors.New("no previous version found")
 )
+
+//TODO these need to be in cmd, not lib
+var templates = template.Must(template.ParseGlob(filepath.Join(templatesDir(), "*")))
+var goMigrationDriverTemplate = templates.Lookup("migration-main.go.tmpl")
+var goMigrationTemplate = templates.Lookup("migration.go.tmpl")
+var sqlMigrationTemplate = templates.Lookup("migration.sql.tmpl")
+
+func templatesDir() string {
+	if _, file, _, ok := runtime.Caller(0); ok {
+		return filepath.Join(filepath.Dir(file), "templates")
+	}
+	// runtime.Caller() failed. That's weird...
+	// Try `./templates`, we'll either get lucky, or `template.Must()` will blow
+	// up for us.
+	return "./templates"
+}
 
 type MigrationRecord struct {
 	VersionId int64
@@ -378,29 +395,3 @@ func FinalizeMigration(conf *DBConf, txn *sql.Tx, direction bool, v int64) error
 
 	return txn.Commit()
 }
-
-var goMigrationTemplate = template.Must(template.New("goose.go-migration").Parse(`package main
-
-import (
-	"database/sql"
-)
-
-// Up is executed when this migration is applied
-func Up_{{ . }}(txn *sql.Tx) {
-
-}
-
-// Down is executed when this migration is rolled back
-func Down_{{ . }}(txn *sql.Tx) {
-
-}
-`))
-
-var sqlMigrationTemplate = template.Must(template.New("goose.sql-migration").Parse(`-- +goose Up
--- SQL in section 'Up' is executed when this migration is applied
-
-
--- +goose Down
--- SQL section 'Down' is executed when this migration is rolled back
-
-`))
