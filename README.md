@@ -20,17 +20,17 @@ goose provides several commands to help manage your database schema.
 
 ## create
 
-Create a new Go migration.
+Create a new SQL migration.
 
     $ goose create AddSomeColumns
-    $ goose: created db/migrations/20130106093224_AddSomeColumns.go
+    $ goose: created db/migrations/20130106093224_AddSomeColumns.sql
 
 Edit the newly created script to define the behavior of your migration.
 
-You can also create an SQL migration:
+You can also create a GO migration:
 
-    $ goose create AddSomeColumns sql
-    $ goose: created db/migrations/20130106093224_AddSomeColumns.sql
+    $ goose create -type go AddSomeColumns
+    $ goose: created db/migrations/20130106093224_AddSomeColumns.go
 
 ## up
 
