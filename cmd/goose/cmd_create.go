@@ -12,21 +12,22 @@ import (
 
 var createCmd = &Command{
 	Name:    "create",
-	Usage:   "",
+	Usage:   "<migration_name>",
 	Summary: "Create the scaffolding for a new migration",
 	Help:    `create extended help here...`,
 	Run:     createRun,
 }
 
+var migrationType string
+
+func init() {
+	createCmd.Flag.StringVar(&migrationType, "type", "sql", "type of migration to create [sql,go]")
+}
+
 func createRun(cmd *Command, args ...string) {
-
-	if len(args) < 1 {
-		log.Fatal("goose create: migration name required")
-	}
-
-	migrationType := "go" // default to Go migrations
-	if len(args) >= 2 {
-		migrationType = args[1]
+	if len(args) != 1 {
+		cmd.Flag.Usage()
+		os.Exit(1)
 	}
 
 	conf, err := dbConfFromFlags()

@@ -2,6 +2,8 @@ package main
 
 import (
 	"flag"
+	"fmt"
+	"os"
 )
 
 // shamelessly snagged from the go tool
@@ -19,9 +21,13 @@ type Command struct {
 }
 
 func (c *Command) Exec(args []string) {
+	name := os.Args[0] + " " + c.Name
 	c.Flag.Usage = func() {
-		// helpFunc(c, c.Name)
+		fmt.Fprintf(os.Stderr, "Usage: %s [args...] %s\n", name, c.Usage)
+		c.Flag.PrintDefaults()
 	}
-	c.Flag.Parse(args)
+	if err := c.Flag.Parse(args); err != nil {
+		os.Exit(1)
+	}
 	c.Run(c, c.Flag.Args()...)
 }
