@@ -27,7 +27,7 @@ Create a new SQL migration.
 
 Edit the newly created script to define the behavior of your migration.
 
-You can also create a GO migration:
+You can also create a Go migration:
 
     $ goose create -type go AddSomeColumns
     $ goose: created db/migrations/20130106093224_AddSomeColumns.go
