@@ -1,4 +1,4 @@
-// +build !nosqlite
+// +build !nosqlite3
 
 package main
 
@@ -6,5 +6,5 @@ package main
 import _ "github.com/mattn/go-sqlite3"
 
 func init() {
-	drivers = append(drivers, "sqlite")
+	drivers = append(drivers, "sqlite3")
 }

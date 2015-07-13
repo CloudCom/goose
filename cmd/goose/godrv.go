@@ -1,4 +1,4 @@
-// +build !nogodrv
+// +build !nomymysql
 
 package main
 
@@ -6,5 +6,5 @@ package main
 import _ "github.com/ziutek/mymysql/godrv"
 
 func init() {
-	drivers = append(drivers, "godrv")
+	drivers = append(drivers, "mymysql")
 }
