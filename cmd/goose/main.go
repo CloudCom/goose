@@ -8,16 +8,14 @@ import (
 	"text/template"
 
 	"github.com/CloudCom/goose/lib/goose"
-	_ "github.com/go-sql-driver/mysql"
-	_ "github.com/lib/pq"
-	_ "github.com/mattn/go-sqlite3"
-	_ "github.com/ziutek/mymysql/godrv"
 )
 
 // global options. available to any subcommands.
 var flagPath = flag.String("path", "db", "folder containing db info")
 var flagEnv = flag.String("env", "development", "which DB environment to use")
 var flagPgSchema = flag.String("pgschema", "", "which postgres-schema to migrate (default = none)")
+
+var drivers []string
 
 // helper to create a DBConf from the given flags
 func dbConfFromFlags() (dbconf *goose.DBConf, err error) {
@@ -31,6 +29,7 @@ var commands = []*Command{
 	statusCmd,
 	createCmd,
 	dbVersionCmd,
+	driversCmd,
 }
 
 func main() {
