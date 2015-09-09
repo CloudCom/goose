@@ -79,8 +79,8 @@ func statusRun(cmd *Command, args ...string) {
 
 func printMigrationStatus(db *sql.DB, version int64, script string) {
 	var row goose.MigrationRecord
-	q := "SELECT tstamp, is_applied FROM goose_db_version WHERE version_id=? ORDER BY tstamp DESC LIMIT 1"
-	e := db.QueryRow(q, version).Scan(&row.TStamp, &row.IsApplied)
+	q := fmt.Sprintf("SELECT tstamp, is_applied FROM goose_db_version WHERE version_id=%d ORDER BY tstamp DESC LIMIT 1", version)
+	e := db.QueryRow(q).Scan(&row.TStamp, &row.IsApplied)
 
 	if e != nil && e != sql.ErrNoRows {
 		log.Fatal(e)
