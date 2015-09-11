@@ -8,13 +8,13 @@ import (
 
 func TestBasics(t *testing.T) {
 
-	dbconf, err := NewDBConf("../../db-sample", "test", "")
+	dbconf, err := NewDBConf("../../_example", "test", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	got := []string{dbconf.MigrationsDir, dbconf.Env, dbconf.Driver.Name, dbconf.Driver.OpenStr}
-	want := []string{"../../db-sample/migrations", "test", "postgres", "user=liam dbname=tester sslmode=disable"}
+	want := []string{"../../_example/migrations", "test", "postgres", "user=liam dbname=tester sslmode=disable"}
 
 	for i, s := range got {
 		if s != want[i] {
@@ -25,7 +25,7 @@ func TestBasics(t *testing.T) {
 
 func TestImportOverride(t *testing.T) {
 
-	dbconf, err := NewDBConf("../../db-sample", "customimport", "")
+	dbconf, err := NewDBConf("../../_example", "customimport", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +47,7 @@ func TestDriverSetFromEnvironmentVariable(t *testing.T) {
 	os.Setenv(databaseUrlEnvVariableKey, databaseUrlEnvVariableVal)
 	os.Setenv(databaseOpenStringKey, databaseOpenStringVal)
 
-	dbconf, err := NewDBConf("../../db-sample", "environment_variable_config", "")
+	dbconf, err := NewDBConf("../../_example", "environment_variable_config", "")
 	if err != nil {
 		t.Fatal(err)
 	}
