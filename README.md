@@ -14,6 +14,21 @@ You can also build goose into your own applications by importing `github.com/Clo
 
 NOTE: the API is still new, and may undergo some changes.
 
+## Omitting drivers
+
+The default goose binary includes support for all available drivers. Sometimes this results in a lengthy build process. Drivers may be omitted from the build by using build tags.
+
+For example
+
+    $ go get -tags nosqlite3 github.com/CloudCom/goose/cmd/goose
+
+The available tags are:
+
+  * `nomymysql`
+  * `nomysql`
+  * `nopq`
+  * `nosqlite3`
+
 # Usage
 
 goose provides several commands to help manage your database schema.
