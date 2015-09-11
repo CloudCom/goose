@@ -11,10 +11,8 @@ before_install:
   - go get github.com/fzipp/gocyclo
 
 install:
-  - go get -t ./lib/goose
-  - go build ./lib/goose
-  - go get -t ./cmd/goose
-  - go build ./cmd/goose
+  - go get -t -d ./...
+  - go build ./...
 
 script:
   # make sure code is properly formatted and simplified
@@ -22,7 +20,7 @@ script:
   # check for possible uh ohs
   - go vet ./...
   # run tests checking for race conditions
-  - go test ./lib/goose -v -race
+  - go test ./... -v -race
 
 after_success:
   # check possible styling errors
