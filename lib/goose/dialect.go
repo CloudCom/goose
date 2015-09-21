@@ -77,7 +77,7 @@ func (pg RedshiftDialect) createVersionTableSql() string {
 }
 
 func (pg RedshiftDialect) insertVersionSql() string {
-	return "INSERT INTO goose_db_version (version_id, is_applied, tstamp) VALUES ($1, $2, GETDATE());"
+	return "INSERT INTO goose_db_version (version_id, is_applied, tstamp) VALUES ($1, $2, SYSDATE);"
 }
 
 func (pg RedshiftDialect) dbVersionQuery(db *sql.DB) (*sql.Rows, error) {
