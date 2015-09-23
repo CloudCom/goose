@@ -97,6 +97,11 @@ func newDBDriver(name, open string) DBDriver {
 		d.Import = "github.com/lib/pq"
 		d.Dialect = &PostgresDialect{}
 
+	case "redshift":
+		d.Name = "postgres"
+		d.Import = "github.com/lib/pq"
+		d.Dialect = &RedshiftDialect{}
+
 	case "mymysql":
 		d.Import = "github.com/ziutek/mymysql/godrv"
 		d.Dialect = &MySqlDialect{}
