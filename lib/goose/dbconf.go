@@ -24,11 +24,10 @@ type DBConf struct {
 	MigrationsDir string
 	Env           string
 	Driver        DBDriver
-	PgSchema      string
 }
 
 // extract configuration details from the given file
-func NewDBConf(p, env string, pgschema string) (*DBConf, error) {
+func NewDBConf(p, env string) (*DBConf, error) {
 
 	cfgFile := filepath.Join(p, "dbconf.yml")
 
@@ -78,7 +77,6 @@ func NewDBConf(p, env string, pgschema string) (*DBConf, error) {
 		MigrationsDir: filepath.Join(p, "migrations"),
 		Env:           env,
 		Driver:        d,
-		PgSchema:      pgschema,
 	}, nil
 }
 
@@ -128,17 +126,5 @@ func (drv *DBDriver) IsValid() bool {
 //
 // Callers must Close() the returned DB.
 func OpenDBFromDBConf(conf *DBConf) (*sql.DB, error) {
-	db, err := sql.Open(conf.Driver.Name, conf.Driver.OpenStr)
-	if err != nil {
-		return nil, fmt.Errorf("connecting to DB: %s", err)
-	}
-
-	// if a postgres schema has been specified, apply it
-	if conf.Driver.Name == "postgres" && conf.PgSchema != "" {
-		if _, err := db.Exec("SET search_path TO " + conf.PgSchema); err != nil {
-			return nil, fmt.Errorf("setting postgres search_path: %s", err)
-		}
-	}
-
-	return db, nil
+	return sql.Open(conf.Driver.Name, conf.Driver.OpenStr)
 }
