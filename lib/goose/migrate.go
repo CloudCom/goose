@@ -211,7 +211,7 @@ func EnsureDBVersion(conf *DBConf, db *sql.DB) (int64, error) {
 		if err == ErrTableDoesNotExist {
 			return 0, createVersionTable(conf, db)
 		}
-		return 0, err
+		return 0, fmt.Errorf("getting db version: %s", err)
 	}
 	defer rows.Close()
 
@@ -264,14 +264,14 @@ func createVersionTable(conf *DBConf, db *sql.DB) error {
 
 	if _, err := txn.Exec(d.createVersionTableSql()); err != nil {
 		txn.Rollback()
-		return err
+		return fmt.Errorf("creating migration table: %s", err)
 	}
 
 	version := 0
 	applied := true
 	if _, err := txn.Exec(d.insertVersionSql(), version, applied); err != nil {
 		txn.Rollback()
-		return err
+		return fmt.Errorf("inserting first migration: %s", err)
 	}
 
 	return txn.Commit()

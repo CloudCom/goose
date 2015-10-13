@@ -18,7 +18,7 @@ func upRun(cmd *Command, args ...string) {
 
 	conf, err := dbConfFromFlags()
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("Error loading config file:", err)
 	}
 
 	target, err := goose.GetMostRecentDBVersion(conf.MigrationsDir)

@@ -17,7 +17,7 @@ var redoCmd = &Command{
 func redoRun(cmd *Command, args ...string) {
 	conf, err := dbConfFromFlags()
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("Error loading config file:", err)
 	}
 
 	current, err := goose.GetDBVersion(conf)
