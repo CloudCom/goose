@@ -50,7 +50,7 @@ func (pg PostgresDialect) insertVersionSql() string {
 }
 
 func (pg PostgresDialect) dbVersionQuery(db *sql.DB) (*sql.Rows, error) {
-	rows, err := db.Query("SELECT version_id, is_applied from goose_db_version ORDER BY id DESC")
+	rows, err := db.Query("SELECT version_id, is_applied, tstamp from goose_db_version ORDER BY id DESC")
 
 	// XXX: check for postgres specific error indicating the table doesn't exist.
 	// for now, assume any error is because the table doesn't exist,
@@ -81,7 +81,7 @@ func (pg RedshiftDialect) insertVersionSql() string {
 }
 
 func (pg RedshiftDialect) dbVersionQuery(db *sql.DB) (*sql.Rows, error) {
-	rows, err := db.Query("SELECT version_id, is_applied from goose_db_version ORDER BY tstamp DESC")
+	rows, err := db.Query("SELECT version_id, is_applied, tstamp from goose_db_version ORDER BY tstamp DESC")
 
 	// XXX: check for postgres specific error indicating the table doesn't exist.
 	// for now, assume any error is because the table doesn't exist,
@@ -114,7 +114,7 @@ func (m MySqlDialect) insertVersionSql() string {
 }
 
 func (m MySqlDialect) dbVersionQuery(db *sql.DB) (*sql.Rows, error) {
-	rows, err := db.Query("SELECT version_id, is_applied from goose_db_version ORDER BY id DESC")
+	rows, err := db.Query("SELECT version_id, is_applied, tstamp from goose_db_version ORDER BY id DESC")
 
 	// XXX: check for mysql specific error indicating the table doesn't exist.
 	// for now, assume any error is because the table doesn't exist,
@@ -146,7 +146,7 @@ func (m Sqlite3Dialect) insertVersionSql() string {
 }
 
 func (m Sqlite3Dialect) dbVersionQuery(db *sql.DB) (*sql.Rows, error) {
-	rows, err := db.Query("SELECT version_id, is_applied from goose_db_version ORDER BY id DESC")
+	rows, err := db.Query("SELECT version_id, is_applied, tstamp from goose_db_version ORDER BY id DESC")
 
 	if err != nil && strings.Contains(err.Error(), "no such table") {
 		err = ErrTableDoesNotExist
