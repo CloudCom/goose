@@ -9,13 +9,14 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 )
 
 type templateData struct {
 	Version    int64
 	Import     string
 	Conf       string // gob encoded DBConf
-	Direction  bool
+	Direction  Direction
 	Func       string
 	InsertStmt string
 }
@@ -33,19 +34,13 @@ func init() {
 // original .go migration, and execute it via `go run` along
 // with a main() of our own creation.
 //
-func runGoMigration(conf *DBConf, path string, version int64, direction bool) error {
-
+func runGoMigration(conf *DBConf, path string, version int64, direction Direction) error {
 	// everything gets written to a temp dir, and zapped afterwards
 	d, e := ioutil.TempDir("", "goose")
 	if e != nil {
 		log.Fatal(e)
 	}
 	defer os.RemoveAll(d)
-
-	directionStr := "Down"
-	if direction {
-		directionStr = "Up"
-	}
 
 	var bb bytes.Buffer
 	if err := gob.NewEncoder(&bb).Encode(conf); err != nil {
@@ -67,7 +62,7 @@ func runGoMigration(conf *DBConf, path string, version int64, direction bool) er
 		Import:     conf.Driver.Import,
 		Conf:       sb.String(),
 		Direction:  direction,
-		Func:       fmt.Sprintf("%v_%v", directionStr, version),
+		Func:       fmt.Sprintf("%v_%v", strings.ToTitle(direction.String()), version),
 		InsertStmt: conf.Driver.Dialect.insertVersionSql(),
 	}
 	main, e := writeTemplateToFile(filepath.Join(d, "goose_main.go"), goMigrationDriverTemplate, td)

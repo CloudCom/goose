@@ -4,8 +4,10 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/kylelemons/go-gypsy/yaml"
 	"github.com/lib/pq"
@@ -126,5 +128,23 @@ func (drv *DBDriver) IsValid() bool {
 //
 // Callers must Close() the returned DB.
 func OpenDBFromDBConf(conf *DBConf) (*sql.DB, error) {
+	// we depend on time parsing, so make sure it's enabled with the mysql driver
+	if conf.Driver.Name == "mysql" {
+		i := strings.Index(conf.Driver.OpenStr, "?")
+		if i == -1 {
+			i = len(conf.Driver.OpenStr)
+			conf.Driver.OpenStr = conf.Driver.OpenStr + "?"
+		}
+		i++
+
+		q, err := url.ParseQuery(conf.Driver.OpenStr[i:])
+		if err != nil {
+			return nil, err
+		}
+		q.Set("parseTime", "true")
+
+		conf.Driver.OpenStr = conf.Driver.OpenStr[:i] + q.Encode()
+	}
+
 	return sql.Open(conf.Driver.Name, conf.Driver.OpenStr)
 }

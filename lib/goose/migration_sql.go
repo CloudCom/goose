@@ -41,8 +41,7 @@ func endsWithSemicolon(line string) bool {
 // within a statement. For these cases, we provide the explicit annotations
 // 'StatementBegin' and 'StatementEnd' to allow the script to
 // tell us to ignore semicolons.
-func splitSQLStatements(r io.Reader, direction bool) (stmts []string) {
-
+func splitSQLStatements(r io.Reader, direction Direction) (stmts []string) {
 	var buf bytes.Buffer
 	scanner := bufio.NewScanner(r)
 
@@ -64,12 +63,12 @@ func splitSQLStatements(r io.Reader, direction bool) (stmts []string) {
 			cmd := strings.TrimSpace(line[len(sqlCmdPrefix):])
 			switch cmd {
 			case "Up":
-				directionIsActive = (direction == true)
+				directionIsActive = (direction == DirectionUp)
 				upSections++
 				break
 
 			case "Down":
-				directionIsActive = (direction == false)
+				directionIsActive = (direction == DirectionDown)
 				downSections++
 				break
 
@@ -135,7 +134,7 @@ func splitSQLStatements(r io.Reader, direction bool) (stmts []string) {
 //
 // All statements following an Up or Down directive are grouped together
 // until another direction directive is found.
-func runSQLMigration(conf *DBConf, db *sql.DB, scriptFile string, v int64, direction bool) error {
+func runSQLMigration(conf *DBConf, db *sql.DB, scriptFile string, v int64, direction Direction) error {
 
 	txn, err := db.Begin()
 	if err != nil {

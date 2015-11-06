@@ -1,71 +1,346 @@
 package goose
 
 import (
+	"io/ioutil"
+	"os"
+	"path/filepath"
 	"testing"
+
+	_ "github.com/go-sql-driver/mysql"
+	_ "github.com/lib/pq"
+	_ "github.com/mattn/go-sqlite3"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestMigrationMapSortUp(t *testing.T) {
-
-	ms := migrationSorter{}
-
-	// insert in any order
-	ms = append(ms, newMigration(20120000, "test"))
-	ms = append(ms, newMigration(20128000, "test"))
-	ms = append(ms, newMigration(20129000, "test"))
-	ms = append(ms, newMigration(20127000, "test"))
-
-	ms.Sort(true) // sort Upwards
-
-	sorted := []int64{20120000, 20127000, 20128000, 20129000}
-
-	validateMigrationSort(t, ms, sorted)
+func getSqlite3Driver(t *testing.T) DBDriver {
+	return DBDriver{
+		Name:    "sqlite3",
+		Dialect: Sqlite3Dialect{},
+		OpenStr: ":memory:",
+	}
 }
 
-func TestMigrationMapSortDown(t *testing.T) {
-
-	ms := migrationSorter{}
-
-	// insert in any order
-	ms = append(ms, newMigration(20120000, "test"))
-	ms = append(ms, newMigration(20128000, "test"))
-	ms = append(ms, newMigration(20129000, "test"))
-	ms = append(ms, newMigration(20127000, "test"))
-
-	ms.Sort(false) // sort Downwards
-
-	sorted := []int64{20129000, 20128000, 20127000, 20120000}
-
-	validateMigrationSort(t, ms, sorted)
+func getMysqlDriver(t *testing.T) DBDriver {
+	dsn := os.Getenv("MYSQL_DATABASE_DSN")
+	if dsn == "" {
+		t.SkipNow()
+	}
+	return DBDriver{
+		Name:    "mysql",
+		Dialect: MySqlDialect{},
+		OpenStr: dsn,
+	}
 }
 
-func validateMigrationSort(t *testing.T, ms migrationSorter, sorted []int64) {
+func getPostgresDriver(t *testing.T) DBDriver {
+	dsn := os.Getenv("POSTGRES_DATABASE_DSN")
+	if dsn == "" {
+		t.SkipNow()
+	}
+	return DBDriver{
+		Name:    "postgres",
+		Dialect: PostgresDialect{},
+		OpenStr: dsn,
+	}
+}
 
-	for i, m := range ms {
-		if sorted[i] != m.Version {
-			t.Error("incorrect sorted version")
-		}
+func getRedshiftDriver(t *testing.T) DBDriver {
+	dsn := os.Getenv("REDSHIFT_DATABASE_DSN")
+	if dsn == "" {
+		t.SkipNow()
+	}
+	return DBDriver{
+		Name:    "postgres",
+		Dialect: RedshiftDialect{},
+		OpenStr: dsn,
+	}
+}
 
-		var next, prev int64
+func TestMigrationSorterLen(t *testing.T) {
+	ms := migrationSorter{
+		{Version: 1},
+		{Version: 2},
+		{Version: 4},
+		{Version: 3},
+	}
+	l := ms.Len()
+	if l != 4 {
+		t.Errorf("expected ms.Len() == 4, but got %d\n", l)
+	}
+}
 
-		if i == 0 {
-			prev = -1
-			next = ms[i+1].Version
-		} else if i == len(ms)-1 {
-			prev = ms[i-1].Version
-			next = -1
-		} else {
-			prev = ms[i-1].Version
-			next = ms[i+1].Version
-		}
+func TestMigrationSorterSwap(t *testing.T) {
+	ms := migrationSorter{
+		{Version: 1},
+		{Version: 2},
+		{Version: 4},
+		{Version: 3},
+	}
+	ms.Swap(1, 2)
+	if ms[1].Version != 4 {
+		t.Errorf("expected ms[1].Version == 4, but got %d\n", ms[1].Version)
+	}
+	if ms[2].Version != 2 {
+		t.Errorf("expected ms[2].Version == 2, but got %d\n", ms[1].Version)
+	}
+}
 
-		if m.Next != next {
-			t.Errorf("mismatched Next. v: %v, got %v, wanted %v\n", m, m.Next, next)
-		}
+func TestMigrationSorterLess(t *testing.T) {
+	ms := migrationSorter{
+		{Version: 1},
+		{Version: 2},
+		{Version: 4},
+		{Version: 3},
+	}
+	v := ms.Less(2, 3)
+	if v != false {
+		t.Errorf("expected ms.Less(2,3) == false, but got %v\n", v)
+	}
+	v = ms.Less(3, 2)
+	if v != true {
+		t.Errorf("expected ms.Less(3,2) == true, but got %v\n", v)
+	}
+}
 
-		if m.Previous != prev {
-			t.Errorf("mismatched Previous v: %v, got %v, wanted %v\n", m, m.Previous, prev)
+func setupMigrationsDir(migrationMap map[string][2]string) (string, func()) {
+	td, err := ioutil.TempDir("", "goose-test-")
+	if err != nil {
+		panic(err)
+	}
+
+	dbPath := filepath.Join(td, "db")
+	migrationsPath := filepath.Join(dbPath, "migrations")
+	os.MkdirAll(migrationsPath, 0700)
+
+	for name, migrations := range migrationMap {
+		migStr := `-- +goose Up
+` + migrations[0] + `
+
+-- +goose Down
+` + migrations[1] + `
+`
+		if err := ioutil.WriteFile(filepath.Join(migrationsPath, name), []byte(migStr), 0600); err != nil {
+			panic(err)
 		}
 	}
 
-	t.Log(ms)
+	return migrationsPath, func() { os.RemoveAll(td) }
+}
+
+func TestCollectMigrations(t *testing.T) {
+	md, mdCleanup := setupMigrationsDir(map[string][2]string{
+		"20010203040506_first.sql":  [2]string{"SELECT 1;", "SELECT 1;"},
+		"20010203040507_second.sql": [2]string{"SELECT 2;", "SELECT 2;"},
+		"20010203040508_third.sql":  [2]string{"SELECT 3;", "SELECT 3;"},
+	})
+	defer mdCleanup()
+
+	migs, err := CollectMigrations(md)
+	require.NoError(t, err)
+
+	assert.Len(t, migs, 3)
+	assert.Contains(t, migs, &Migration{
+		Version:   20010203040506,
+		IsApplied: false,
+		Source:    filepath.Join(md, "20010203040506_first.sql"),
+	})
+	assert.Contains(t, migs, &Migration{
+		Version:   20010203040507,
+		IsApplied: false,
+		Source:    filepath.Join(md, "20010203040507_second.sql"),
+	})
+	assert.Contains(t, migs, &Migration{
+		Version:   20010203040508,
+		IsApplied: false,
+		Source:    filepath.Join(md, "20010203040508_third.sql"),
+	})
+}
+
+func testRunMigrationsOnDb(t *testing.T, driver DBDriver) {
+	md, mdCleanup := setupMigrationsDir(map[string][2]string{
+		"20010203040506_setup.sql": [2]string{"CREATE TABLE test(value VARCHAR(20));", "DROP TABLE test;"},
+		"20010203040507_one.sql":   [2]string{"INSERT INTO test(value) VALUES('one');", "DELETE FROM test WHERE value = 'one';"},
+		"20010203040508_two.sql":   [2]string{"INSERT INTO test(value) VALUES('two');", "DELETE FROM test WHERE value = 'two';"},
+	})
+	defer mdCleanup()
+	conf := &DBConf{
+		Driver:        driver,
+		MigrationsDir: md,
+		Env:           "development",
+	}
+
+	db, err := OpenDBFromDBConf(conf)
+	require.NoError(t, err)
+
+	db.Exec("DROP TABLE goose_db_version")
+	db.Exec("DROP TABLE test")
+
+	err = RunMigrationsOnDb(conf, conf.MigrationsDir, 20010203040508, db)
+	require.NoError(t, err)
+
+	rows, err := db.Query("SELECT value FROM test")
+	require.NoError(t, err)
+	defer rows.Close()
+	var values []string
+	for rows.Next() {
+		var value string
+		err := rows.Scan(&value)
+		require.NoError(t, err)
+		values = append(values, value)
+	}
+
+	assert.Len(t, values, 2)
+	assert.Contains(t, values, "one")
+	assert.Contains(t, values, "two")
+}
+func TestRunMigrationsOnDb_sqlite3(t *testing.T) {
+	testRunMigrationsOnDb(t, getSqlite3Driver(t))
+}
+func TestRunMigrationsOnDb_mysql(t *testing.T) {
+	testRunMigrationsOnDb(t, getMysqlDriver(t))
+}
+func TestRunMigrationsOnDb_postgres(t *testing.T) {
+	testRunMigrationsOnDb(t, getPostgresDriver(t))
+}
+func TestRunMigrationsOnDb_redshift(t *testing.T) {
+	testRunMigrationsOnDb(t, getRedshiftDriver(t))
+}
+
+func testRunMigrationsOnDb_missingMiddle(t *testing.T, driver DBDriver) {
+	md, mdCleanup := setupMigrationsDir(map[string][2]string{
+		"20010203040506_setup.sql": [2]string{"CREATE TABLE test(value VARCHAR(20));", "DROP TABLE test;"},
+		"20010203040507_one.sql":   [2]string{"INSERT INTO test(value) VALUES('one');", "DELETE FROM test WHERE value = 'one';"},
+		"20010203040508_two.sql":   [2]string{"INSERT INTO test(value) VALUES('two');", "DELETE FROM test WHERE value = 'two';"},
+	})
+	defer mdCleanup()
+	conf := &DBConf{
+		Driver:        driver,
+		MigrationsDir: md,
+		Env:           "development",
+	}
+
+	db, err := OpenDBFromDBConf(conf)
+	require.NoError(t, err)
+
+	db.Exec("DROP TABLE goose_db_version")
+	db.Exec("DROP TABLE test")
+
+	// make the middle migration disappear for a moment
+	err = os.Rename(filepath.Join(md, "20010203040507_one.sql"), filepath.Join(md, "20010203040507_one.sql_"))
+	require.NoError(t, err)
+
+	err = RunMigrationsOnDb(conf, conf.MigrationsDir, 20010203040508, db)
+	require.NoError(t, err)
+
+	rows, err := db.Query("SELECT value FROM test")
+	require.NoError(t, err)
+	defer rows.Close()
+	var values []string
+	for rows.Next() {
+		var value string
+		err := rows.Scan(&value)
+		require.NoError(t, err)
+		values = append(values, value)
+	}
+
+	assert.Len(t, values, 1)
+	assert.Contains(t, values, "two")
+
+	// now put it back
+	err = os.Rename(filepath.Join(md, "20010203040507_one.sql_"), filepath.Join(md, "20010203040507_one.sql"))
+	require.NoError(t, err)
+
+	err = RunMigrationsOnDb(conf, conf.MigrationsDir, 20010203040508, db)
+	require.NoError(t, err)
+
+	rows, err = db.Query("SELECT value FROM test")
+	require.NoError(t, err)
+	defer rows.Close()
+	values = []string{}
+	for rows.Next() {
+		var value string
+		err := rows.Scan(&value)
+		require.NoError(t, err)
+		values = append(values, value)
+	}
+
+	assert.Len(t, values, 2)
+	assert.Contains(t, values, "one")
+	assert.Contains(t, values, "two")
+}
+func TestRunMigrationsOnDb_missingMiddle_sqlite3(t *testing.T) {
+	testRunMigrationsOnDb_missingMiddle(t, getSqlite3Driver(t))
+}
+func TestRunMigrationsOnDb_missingMiddle_mysql(t *testing.T) {
+	testRunMigrationsOnDb_missingMiddle(t, getMysqlDriver(t))
+}
+func TestRunMigrationsOnDb_missingMiddle_postgres(t *testing.T) {
+	testRunMigrationsOnDb_missingMiddle(t, getPostgresDriver(t))
+}
+func TestRunMigrationsOnDb_missingMiddle_redshift(t *testing.T) {
+	testRunMigrationsOnDb_missingMiddle(t, getRedshiftDriver(t))
+}
+
+func testRunMigrationsOnDb_upDownUp(t *testing.T, driver DBDriver) {
+	md, mdCleanup := setupMigrationsDir(map[string][2]string{
+		"20010203040506_setup.sql": [2]string{"CREATE TABLE test(value VARCHAR(20));", "DROP TABLE test;"},
+		"20010203040507_one.sql":   [2]string{"INSERT INTO test(value) VALUES('one');", "DELETE FROM test WHERE value = 'one';"},
+		"20010203040508_two.sql":   [2]string{"INSERT INTO test(value) VALUES('two');", "DELETE FROM test WHERE value = 'two';"},
+	})
+	defer mdCleanup()
+	conf := &DBConf{
+		Driver:        driver,
+		MigrationsDir: md,
+		Env:           "development",
+	}
+
+	db, err := OpenDBFromDBConf(conf)
+	require.NoError(t, err)
+
+	db.Exec("DROP TABLE goose_db_version")
+	db.Exec("DROP TABLE test")
+
+	// up
+	err = RunMigrationsOnDb(conf, conf.MigrationsDir, 20010203040508, db)
+	require.NoError(t, err)
+
+	// down
+	err = RunMigrationsOnDb(conf, conf.MigrationsDir, 0, db)
+	require.NoError(t, err)
+
+	rows, err := db.Query("SELECT value FROM test")
+	require.Error(t, err) // table won't exist
+
+	// up
+	err = RunMigrationsOnDb(conf, conf.MigrationsDir, 20010203040508, db)
+	require.NoError(t, err)
+
+	rows, err = db.Query("SELECT value FROM test")
+	require.NoError(t, err)
+	defer rows.Close()
+	var values []string
+	for rows.Next() {
+		var value string
+		err := rows.Scan(&value)
+		require.NoError(t, err)
+		values = append(values, value)
+	}
+
+	assert.Len(t, values, 2)
+	assert.Contains(t, values, "one")
+	assert.Contains(t, values, "two")
+}
+func TestRunMigrationsOnDb_upDownUp_sqlite3(t *testing.T) {
+	testRunMigrationsOnDb_upDownUp(t, getSqlite3Driver(t))
+}
+func TestRunMigrationsOnDb_upDownUp_mysql(t *testing.T) {
+	testRunMigrationsOnDb_upDownUp(t, getMysqlDriver(t))
+}
+func TestRunMigrationsOnDb_upDownUp_postgres(t *testing.T) {
+	testRunMigrationsOnDb_upDownUp(t, getPostgresDriver(t))
+}
+func TestRunMigrationsOnDb_upDownUp_redshift(t *testing.T) {
+	testRunMigrationsOnDb_upDownUp(t, getRedshiftDriver(t))
 }

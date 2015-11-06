@@ -20,6 +20,21 @@ var (
 	ErrNoPreviousVersion = errors.New("no previous version found")
 )
 
+type Direction bool
+
+func (d Direction) String() string {
+	if d == DirectionUp {
+		return "up"
+	} else {
+		return "down"
+	}
+}
+
+const (
+	DirectionDown = Direction(false)
+	DirectionUp   = Direction(true)
+)
+
 //TODO these need to be in cmd, not lib
 var templates = template.Must(template.ParseGlob(filepath.Join(templatesDir(), "*")))
 var goMigrationDriverTemplate = templates.Lookup("migration-main.go.tmpl")
@@ -36,17 +51,11 @@ func templatesDir() string {
 	return "./templates"
 }
 
-type MigrationRecord struct {
-	VersionId int64
-	TStamp    time.Time
-	IsApplied bool // was this a result of up() or down()
-}
-
 type Migration struct {
-	Version  int64
-	Next     int64  // next version, or -1 if none
-	Previous int64  // previous version, -1 if none
-	Source   string // path to .go or .sql script
+	Version   int64
+	IsApplied bool
+	TStamp    time.Time
+	Source    string // path to .go or .sql script
 }
 
 type migrationSorter []*Migration
@@ -56,12 +65,7 @@ func (ms migrationSorter) Len() int           { return len(ms) }
 func (ms migrationSorter) Swap(i, j int)      { ms[i], ms[j] = ms[j], ms[i] }
 func (ms migrationSorter) Less(i, j int) bool { return ms[i].Version < ms[j].Version }
 
-func newMigration(v int64, src string) *Migration {
-	return &Migration{v, -1, -1, src}
-}
-
 func RunMigrations(conf *DBConf, migrationsDir string, target int64) (err error) {
-
 	db, err := OpenDBFromDBConf(conf)
 	if err != nil {
 		return err
@@ -73,30 +77,62 @@ func RunMigrations(conf *DBConf, migrationsDir string, target int64) (err error)
 
 // Runs migration on a specific database instance.
 func RunMigrationsOnDb(conf *DBConf, migrationsDir string, target int64, db *sql.DB) (err error) {
+	//TODO get rid of migrationsDir, it's already in conf.MigrationsDir
 	current, err := EnsureDBVersion(conf, db)
 	if err != nil {
 		return err
 	}
 
-	migrations, err := CollectMigrations(migrationsDir, current, target)
+	migrations, err := CollectMigrations(migrationsDir)
 	if err != nil {
 		return err
 	}
 
-	if len(migrations) == 0 {
-		fmt.Printf("goose: no migrations to run. current version: %d\n", current)
-		return nil
+	if err := getMigrationsStatus(conf, db, migrations); err != nil {
+		return err
 	}
 
-	ms := migrationSorter(migrations)
-	direction := current < target
-	ms.Sort(direction)
+	direction := DirectionUp
+	if target < current {
+		direction = DirectionDown
+	}
+
+	var neededMigrations []*Migration
+	for _, m := range migrations {
+		if direction == DirectionUp {
+			if m.Version > target {
+				continue
+			}
+			if m.IsApplied {
+				continue
+			}
+		} else {
+			if m.Version < target {
+				continue
+			}
+			if !m.IsApplied {
+				continue
+			}
+		}
+		neededMigrations = append(neededMigrations, m)
+	}
+
+	if len(neededMigrations) == 0 {
+		fmt.Printf("goose: no migrations to run. current version: %d, target: %d\n", current, target)
+		return nil
+	}
 
 	fmt.Printf("goose: migrating db environment '%v', current version: %d, target: %d\n",
 		conf.Env, current, target)
 
-	for _, m := range ms {
+	ms := migrationSorter(neededMigrations)
+	if direction == DirectionUp {
+		sort.Sort(ms)
+	} else {
+		sort.Sort(sort.Reverse(ms))
+	}
 
+	for _, m := range ms {
 		switch filepath.Ext(m.Source) {
 		case ".go":
 			err = runGoMigration(conf, m.Source, m.Version, direction)
@@ -116,8 +152,7 @@ func RunMigrationsOnDb(conf *DBConf, migrationsDir string, target int64, db *sql
 
 // collect all the valid looking migration scripts in the
 // migrations folder, and key them by version
-func CollectMigrations(dirpath string, current, target int64) (m []*Migration, err error) {
-
+func CollectMigrations(dirpath string) (m []*Migration, err error) {
 	// extract the numeric component of each migration,
 	// filter out any uninteresting files,
 	// and ensure we only have one file per migration version.
@@ -132,9 +167,7 @@ func CollectMigrations(dirpath string, current, target int64) (m []*Migration, e
 				}
 			}
 
-			if versionFilter(v, current, target) {
-				m = append(m, newMigration(v, name))
-			}
+			m = append(m, &Migration{Version: v, Source: name})
 		}
 
 		return nil
@@ -143,46 +176,11 @@ func CollectMigrations(dirpath string, current, target int64) (m []*Migration, e
 	return m, nil
 }
 
-func versionFilter(v, current, target int64) bool {
-
-	if target > current {
-		return v > current && v <= target
-	}
-
-	if target < current {
-		return v <= current && v > target
-	}
-
-	return false
-}
-
-func (ms migrationSorter) Sort(direction bool) {
-
-	// sort ascending or descending by version
-	if direction {
-		sort.Sort(ms)
-	} else {
-		sort.Sort(sort.Reverse(ms))
-	}
-
-	// now that we're sorted in the appropriate direction,
-	// populate next and previous for each migration
-	for i, m := range ms {
-		prev := int64(-1)
-		if i > 0 {
-			prev = ms[i-1].Version
-			ms[i-1].Next = m.Version
-		}
-		ms[i].Previous = prev
-	}
-}
-
 // look for migration scripts with names in the form:
 //  XXX_descriptivename.ext
 // where XXX specifies the version number
 // and ext specifies the type of migration
 func NumericComponent(name string) (int64, error) {
-
 	base := filepath.Base(name)
 
 	if ext := filepath.Ext(base); ext != ".go" && ext != ".sql" {
@@ -202,16 +200,57 @@ func NumericComponent(name string) (int64, error) {
 	return n, e
 }
 
+func getMigrationsStatus(conf *DBConf, db *sql.DB, migrations []*Migration) error {
+	rows, err := conf.Driver.Dialect.dbVersionQuery(db)
+	if err != nil {
+		if err == ErrTableDoesNotExist {
+			for _, m := range migrations {
+				m.IsApplied = false
+			}
+			return nil
+		}
+		return fmt.Errorf("getting db version: %s", err)
+	}
+	defer rows.Close()
+
+	mm := map[int64]*Migration{}
+	for _, m := range migrations {
+		mm[m.Version] = m
+		// default to false so if the DB doesn't know about the migration...
+		m.IsApplied = false
+	}
+
+	for rows.Next() {
+		var row Migration
+		if err = rows.Scan(&row.Version, &row.IsApplied, &row.TStamp); err != nil {
+			log.Fatal("error scanning rows:", err)
+		}
+
+		m, ok := mm[row.Version]
+		if !ok {
+			continue
+		}
+		if !row.TStamp.After(m.TStamp) {
+			// If the migration went up, then down, it'll have multiple rows.
+			// But we only want the newest, so skip this row if it's older.
+			continue
+		}
+		m.IsApplied = row.IsApplied
+		m.TStamp = row.TStamp
+	}
+
+	return nil
+}
+
 // retrieve the current version for this DB.
 // Create and initialize the DB version table if it doesn't exist.
 func EnsureDBVersion(conf *DBConf, db *sql.DB) (int64, error) {
-
 	rows, err := conf.Driver.Dialect.dbVersionQuery(db)
 	if err != nil {
 		if err == ErrTableDoesNotExist {
 			return 0, createVersionTable(conf, db)
 		}
-		return 0, fmt.Errorf("getting db version: %s", err)
+		return 0, fmt.Errorf("getting db version: %#v", err)
 	}
 	defer rows.Close()
 
@@ -222,15 +261,15 @@ func EnsureDBVersion(conf *DBConf, db *sql.DB) (int64, error) {
 	toSkip := make([]int64, 0)
 
 	for rows.Next() {
-		var row MigrationRecord
-		if err = rows.Scan(&row.VersionId, &row.IsApplied); err != nil {
+		var row Migration
+		if err = rows.Scan(&row.Version, &row.IsApplied, &row.TStamp); err != nil {
 			log.Fatal("error scanning rows:", err)
 		}
 
 		// have we already marked this version to be skipped?
 		skip := false
 		for _, v := range toSkip {
-			if v == row.VersionId {
+			if v == row.Version {
 				skip = true
 				break
 			}
@@ -242,11 +281,11 @@ func EnsureDBVersion(conf *DBConf, db *sql.DB) (int64, error) {
 
 		// if version has been applied we're done
 		if row.IsApplied {
-			return row.VersionId, nil
+			return row.Version, nil
 		}
 
 		// latest version of migration has not been applied.
-		toSkip = append(toSkip, row.VersionId)
+		toSkip = append(toSkip, row.Version)
 	}
 
 	panic("failure in EnsureDBVersion()")
@@ -280,7 +319,6 @@ func createVersionTable(conf *DBConf, db *sql.DB) error {
 // wrapper for EnsureDBVersion for callers that don't already have
 // their own DB instance
 func GetDBVersion(conf *DBConf) (version int64, err error) {
-
 	db, err := OpenDBFromDBConf(conf)
 	if err != nil {
 		return -1, err
@@ -296,7 +334,6 @@ func GetDBVersion(conf *DBConf) (version int64, err error) {
 }
 
 func GetPreviousDBVersion(dirpath string, version int64) (previous int64, err error) {
-
 	previous = -1
 	sawGivenVersion := false
 
@@ -333,7 +370,6 @@ func GetPreviousDBVersion(dirpath string, version int64) (previous int64, err er
 // helper to identify the most recent possible version
 // within a folder of migration scripts
 func GetMostRecentDBVersion(dirpath string) (version int64, err error) {
-
 	version = -1
 
 	filepath.Walk(dirpath, func(name string, info os.FileInfo, walkerr error) error {
@@ -360,7 +396,6 @@ func GetMostRecentDBVersion(dirpath string) (version int64, err error) {
 }
 
 func CreateMigration(name, migrationType, dir string, t time.Time) (path string, err error) {
-
 	if migrationType != "go" && migrationType != "sql" {
 		return "", errors.New("migration type must be 'go' or 'sql'")
 	}
@@ -384,11 +419,10 @@ func CreateMigration(name, migrationType, dir string, t time.Time) (path string,
 
 // Update the version table for the given migration,
 // and finalize the transaction.
-func FinalizeMigration(conf *DBConf, txn *sql.Tx, direction bool, v int64) error {
-
+func FinalizeMigration(conf *DBConf, txn *sql.Tx, direction Direction, v int64) error {
 	// XXX: drop goose_db_version table on some minimum version number?
 	stmt := conf.Driver.Dialect.insertVersionSql()
-	if _, err := txn.Exec(stmt, v, direction); err != nil {
+	if _, err := txn.Exec(stmt, v, bool(direction)); err != nil {
 		txn.Rollback()
 		return err
 	}
