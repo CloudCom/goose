@@ -51,29 +51,29 @@ func TestSplitStatements(t *testing.T) {
 
 	type testData struct {
 		sql       string
-		direction bool
+		direction Direction
 		count     int
 	}
 
 	tests := []testData{
 		{
 			sql:       functxt,
-			direction: true,
+			direction: DirectionUp,
 			count:     2,
 		},
 		{
 			sql:       functxt,
-			direction: false,
+			direction: DirectionDown,
 			count:     2,
 		},
 		{
 			sql:       multitxt,
-			direction: true,
+			direction: DirectionUp,
 			count:     2,
 		},
 		{
 			sql:       multitxt,
-			direction: false,
+			direction: DirectionDown,
 			count:     2,
 		},
 	}
