@@ -1,8 +1,17 @@
-# goose [![Build Status](https://travis-ci.org/CloudCom/goose.svg?branch=master)](https://travis-ci.org/CloudCom/goose) [![Coverage Status](https://coveralls.io/repos/CloudCom/goose/badge.svg)](https://coveralls.io/r/CloudCom/goose)
+[![Documentation](https://godoc.org/github.com/CloudCom/goose?status.png)](http://godoc.org/github.com/CloudCom/goose)
+[![Build Status](https://travis-ci.org/CloudCom/goose.svg?branch=master)](https://travis-ci.org/CloudCom/goose)
+[![Coverage Status](https://coveralls.io/repos/CloudCom/goose/badge.svg?branch=master&service=github)](https://coveralls.io/github/CloudCom/goose?branch=master)
+
+# goose
 
 goose is a database migration tool.
 
 You can manage your database's evolution by creating incremental SQL or Go scripts.
+
+## Stability notice
+This repo is a fork from https://bitbucket.org/liamstask/goose. There are many things that we plan to change, mostly to make the tool easier to use, and more standardized.
+
+As such, until this notice goes away, vendoring is highly recommended.
 
 # Install
 
