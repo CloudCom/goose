@@ -1,8 +1,8 @@
 language: go
 
 go:
-  - 1.4
   - 1.5
+  - 1.4
   - tip
 
 matrix:
@@ -15,6 +15,8 @@ services:
   - postgresql
 
 before_install:
+  - go get github.com/axw/gocov/gocov
+  - go get github.com/mattn/goveralls
   # install linting tools
   - go get github.com/golang/lint/golint
   - go get golang.org/x/tools/cmd/vet
@@ -31,18 +33,21 @@ before_script:
   - export MYSQL_DATABASE_DSN='root@tcp(localhost:3306)/goose'
 
 script:
+  # check for potentially complex functions
+  - "gocyclo -over 15 . ||:"
+  # check possible styling errors
+  - "golint ./... ||:"
   # make sure code is properly formatted and simplified
-  - gofmt -l -s .
+  - test -z "$(gofmt -d . | tee /dev/stderr)"
   # check for possible uh ohs
   - go vet ./...
   # run tests checking for race conditions
-  - go test ./... -v -race
+  - go list ./... | xargs -n 1 go test -v -race -coverprofile=>(sed -e '1!{/^mode:/d}' > .coverprofile)
+
+after_script:
+  - goveralls -coverprofile=.coverprofile
 
 after_success:
-  # check possible styling errors
-  - golint ./...
-  # check for potentially complex functions
-  - gocyclo -over 15 .
   - |
     if [[ "$TRAVIS_PULL_REQUEST" == "false" ]] && [[ "$TRAVIS_BRANCH" == "master" ]]; then
       go list ./... | xargs -n 1 -I{} curl http://godoc.org/-/refresh -d path={}

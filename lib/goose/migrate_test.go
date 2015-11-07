@@ -4,6 +4,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -13,6 +14,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func init() {
+	// when testing with -cover, the non-test source files get moved.
+	// so calculate the templatesDir here instead.
+	if _, file, _, ok := runtime.Caller(0); ok {
+		templatesDir = filepath.Join(filepath.Dir(file), "templates")
+	}
+}
 
 func getSqlite3Driver(t *testing.T) DBDriver {
 	return DBDriver{

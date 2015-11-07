@@ -35,20 +35,29 @@ const (
 	DirectionUp   = Direction(true)
 )
 
-//TODO these need to be in cmd, not lib
-var templates = template.Must(template.ParseGlob(filepath.Join(templatesDir(), "*")))
-var goMigrationDriverTemplate = templates.Lookup("migration-main.go.tmpl")
-var goMigrationTemplate = templates.Lookup("migration.go.tmpl")
-var sqlMigrationTemplate = templates.Lookup("migration.sql.tmpl")
-
-func templatesDir() string {
+var templatesDir = func() string {
 	if _, file, _, ok := runtime.Caller(0); ok {
 		return filepath.Join(filepath.Dir(file), "templates")
 	}
 	// runtime.Caller() failed. That's weird...
 	// Try `./templates`, we'll either get lucky, or `template.Must()` will blow
 	// up for us.
-	return "./templates"
+	return "templates"
+}()
+
+//TODO templates should be loaded by the client.
+// Not everyone using the lib needs/has them.
+var templates *template.Template
+
+func getTemplate(name string) (*template.Template, error) {
+	if templates == nil {
+		var err error
+		templates, err = template.ParseGlob(filepath.Join(templatesDir, "*"))
+		if err != nil {
+			return nil, err
+		}
+	}
+	return templates.Lookup(name), nil
 }
 
 type Migration struct {
@@ -407,9 +416,12 @@ func CreateMigration(name, migrationType, dir string, t time.Time) (path string,
 
 	var tmpl *template.Template
 	if migrationType == "sql" {
-		tmpl = sqlMigrationTemplate
+		tmpl, err = getTemplate("migration.sql.tmpl")
 	} else {
-		tmpl = goMigrationTemplate
+		tmpl, err = getTemplate("migration.go.tmpl")
+	}
+	if err != nil {
+		return "", err
 	}
 
 	path, err = writeTemplateToFile(fpath, tmpl, timestamp)

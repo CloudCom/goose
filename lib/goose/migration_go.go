@@ -65,7 +65,13 @@ func runGoMigration(conf *DBConf, path string, version int64, direction Directio
 		Func:       fmt.Sprintf("%v_%v", strings.ToTitle(direction.String()), version),
 		InsertStmt: conf.Driver.Dialect.insertVersionSql(),
 	}
-	main, e := writeTemplateToFile(filepath.Join(d, "goose_main.go"), goMigrationDriverTemplate, td)
+
+	tmpl, err := getTemplate("migration-main.go.tmpl")
+	if err != nil {
+		log.Fatal(e)
+	}
+
+	main, e := writeTemplateToFile(filepath.Join(d, "goose_main.go"), tmpl, td)
 	if e != nil {
 		log.Fatal(e)
 	}
