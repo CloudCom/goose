@@ -28,14 +28,56 @@ type DBConf struct {
 	Driver        DBDriver
 }
 
-// extract configuration details from the given file
-func NewDBConf(p, env string) (*DBConf, error) {
+// findDBConf looks for a dbconf.yaml file starting at the given directory and
+// walking up in the directory hierarchy.
+// Returns empty string if not found.
+func findDBConf(dbDir string) string {
+	dbDir, err := filepath.Abs(dbDir)
+	if err != nil {
+		return ""
+	}
 
-	cfgFile := filepath.Join(p, "dbconf.yml")
+	for {
+		path := filepath.Join(dbDir, "dbconf.yaml")
+		if _, err := os.Stat(path); err == nil {
+			return path
+		}
+		path = filepath.Join(dbDir, "dbconf.yml")
+		if _, err := os.Stat(path); err == nil {
+			return path
+		}
+
+		nextDir := filepath.Dir(dbDir)
+		if nextDir == dbDir {
+			// at the root
+			break
+		}
+		dbDir = nextDir
+	}
+
+	return ""
+}
+
+// extract configuration details from the given file
+func NewDBConf(dbDir, env string) (*DBConf, error) {
+	cfgFile := findDBConf(dbDir)
+	if cfgFile == "" {
+		return nil, fmt.Errorf("could not find dbconf.yaml")
+	}
+	dbDir = filepath.Dir(cfgFile)
+	migrationsDir := filepath.Join(dbDir, "migrations")
 
 	f, err := yaml.ReadFile(cfgFile)
 	if err != nil {
 		return nil, err
+	}
+
+	if md, err := f.Get(fmt.Sprintf("%s.migrationsDir", env)); err == nil {
+		if filepath.IsAbs(md) {
+			migrationsDir = md
+		} else {
+			migrationsDir = filepath.Join(dbDir, md)
+		}
 	}
 
 	drv, err := f.Get(fmt.Sprintf("%s.driver", env))
@@ -76,7 +118,7 @@ func NewDBConf(p, env string) (*DBConf, error) {
 	}
 
 	return &DBConf{
-		MigrationsDir: filepath.Join(p, "migrations"),
+		MigrationsDir: migrationsDir,
 		Env:           env,
 		Driver:        d,
 	}, nil
