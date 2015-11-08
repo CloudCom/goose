@@ -110,8 +110,7 @@ func RunMigrationsOnDb(conf *DBConf, migrationsDir string, target int64, db *sql
 		return nil
 	}
 
-	fmt.Printf("goose: migrating db environment '%v', current version: %d, target: %d\n",
-		conf.Env, current, target)
+	fmt.Printf("goose: migrating db, current version: %d, target: %d\n", current, target)
 
 	ms := migrationSorter(neededMigrations)
 	if direction == DirectionUp {

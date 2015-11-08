@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/kylelemons/go-gypsy/yaml"
-	"github.com/lib/pq"
 )
 
 // DBDriver encapsulates the info needed to work with
@@ -24,50 +23,118 @@ type DBDriver struct {
 
 type DBConf struct {
 	MigrationsDir string
-	Env           string
 	Driver        DBDriver
 }
 
+var defaultDBConfYaml = `
+migrationsDir: $DB_MIGRATIONS_DIR
+driver: $DB_DRIVER
+import: $DB_DRIVER_IMPORT
+dialect: $DB_DIALECT
+open: $DB_DSN
+`
+
+// findDBConf looks for a dbconf.yaml file starting at the given directory and
+// walking up in the directory hierarchy.
+// Returns empty string if not found.
+func findDBConf(dbDir string) string {
+	dbDir, err := filepath.Abs(dbDir)
+	if err != nil {
+		return ""
+	}
+
+	for {
+		paths := []string{
+			"dbconf.yaml",
+			"dbconf.yml",
+			filepath.Join("db", "dbconf.yaml"),
+			filepath.Join("db", "dbconf.yml"),
+		}
+
+		for _, path := range paths {
+			path = filepath.Join(dbDir, path)
+			if _, err := os.Stat(path); err == nil {
+				return path
+			}
+		}
+
+		nextDir := filepath.Dir(dbDir)
+		if nextDir == dbDir {
+			// at the root
+			break
+		}
+		dbDir = nextDir
+	}
+
+	return ""
+}
+
+func confGet(f *yaml.File, env string, name string) (string, error) {
+	if env != "" {
+		if v, err := f.Get(fmt.Sprintf("%s.%s", env, name)); err == nil {
+			return os.ExpandEnv(v), nil
+		}
+	}
+	v, err := f.Get(name)
+	if err != nil {
+		return "", err
+	}
+	return os.ExpandEnv(v), nil
+}
+
 // extract configuration details from the given file
-func NewDBConf(p, env string) (*DBConf, error) {
+func NewDBConf(dbDir, env string) (*DBConf, error) {
+	cfgFile := findDBConf(dbDir)
+	var f *yaml.File
+	if cfgFile == "" {
+		root, _ := yaml.Parse(strings.NewReader(defaultDBConfYaml))
+		f = &yaml.File{
+			Root: root,
+		}
+	} else {
+		dbDir = filepath.Dir(cfgFile)
 
-	cfgFile := filepath.Join(p, "dbconf.yml")
-
-	f, err := yaml.ReadFile(cfgFile)
-	if err != nil {
-		return nil, err
-	}
-
-	drv, err := f.Get(fmt.Sprintf("%s.driver", env))
-	if err != nil {
-		return nil, err
-	}
-	drv = os.ExpandEnv(drv)
-
-	open, err := f.Get(fmt.Sprintf("%s.open", env))
-	if err != nil {
-		return nil, err
-	}
-	open = os.ExpandEnv(open)
-
-	// Automatically parse postgres urls
-	if drv == "postgres" {
-
-		// Assumption: If we can parse the URL, we should
-		if parsedURL, err := pq.ParseURL(open); err == nil && parsedURL != "" {
-			open = parsedURL
+		var err error
+		f, err = yaml.ReadFile(cfgFile)
+		if err != nil {
+			return nil, fmt.Errorf("error loading config file: %s", err)
 		}
 	}
 
+	migrationsDir := filepath.Join(dbDir, "migrations")
+	if md, err := confGet(f, env, "migrationsDir"); err == nil {
+		if filepath.IsAbs(md) {
+			migrationsDir = md
+		} else {
+			migrationsDir = filepath.Join(dbDir, md)
+		}
+	}
+
+	drv, err := confGet(f, env, "driver")
+	if err != nil {
+		return nil, err
+	}
+	var imprt string
+	// see if "driver" param is a full import path
+	if i := strings.LastIndex(drv, "/"); i != -1 {
+		imprt = drv
+		drv = imprt[i+1:]
+	}
+
+	open, _ := confGet(f, env, "open")
+
 	d := newDBDriver(drv, open)
 
+	if imprt != "" {
+		d.Import = imprt
+	}
 	// allow the configuration to override the Import for this driver
-	if imprt, err := f.Get(fmt.Sprintf("%s.import", env)); err == nil {
+	if imprt, err := confGet(f, env, "import"); err == nil && imprt != "" {
 		d.Import = imprt
 	}
 
 	// allow the configuration to override the Dialect for this driver
-	if dialect, err := f.Get(fmt.Sprintf("%s.dialect", env)); err == nil {
+	if dialect, err := confGet(f, env, "dialect"); err == nil && dialect != "" {
 		d.Dialect = dialectByName(dialect)
 	}
 
@@ -76,8 +143,7 @@ func NewDBConf(p, env string) (*DBConf, error) {
 	}
 
 	return &DBConf{
-		MigrationsDir: filepath.Join(p, "migrations"),
-		Env:           env,
+		MigrationsDir: migrationsDir,
 		Driver:        d,
 	}, nil
 }
@@ -86,14 +152,14 @@ func NewDBConf(p, env string) (*DBConf, error) {
 // fields for drivers that we know about.
 // Further customization may be done in NewDBConf
 func newDBDriver(name, open string) DBDriver {
-
 	d := DBDriver{
 		Name:    name,
 		OpenStr: open,
 	}
 
-	switch name {
+	switch strings.ToLower(name) {
 	case "postgres":
+		d.Name = "postgres"
 		d.Import = "github.com/lib/pq"
 		d.Dialect = &PostgresDialect{}
 
@@ -111,6 +177,7 @@ func newDBDriver(name, open string) DBDriver {
 		d.Dialect = &MySqlDialect{}
 
 	case "sqlite3":
+		d.Name = "sqlite3"
 		d.Import = "github.com/mattn/go-sqlite3"
 		d.Dialect = &Sqlite3Dialect{}
 	}
