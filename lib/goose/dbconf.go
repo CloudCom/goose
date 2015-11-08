@@ -26,9 +26,10 @@ type DBConf struct {
 	Driver        DBDriver
 }
 
-var defaultDBConfYaml = `---
+var defaultDBConfYaml = `
 migrationsDir: $DB_MIGRATIONS_DIR
 driver: $DB_DRIVER
+import: $DB_DRIVER_IMPORT
 dialect: $DB_DIALECT
 open: $DB_DSN
 `
@@ -37,10 +38,10 @@ open: $DB_DSN
 // walking up in the directory hierarchy.
 // Returns empty string if not found.
 func findDBConf(dbDir string) string {
-	//dbDir, err := filepath.Abs(dbDir)
-	//if err != nil {
-	//return ""
-	//}
+	dbDir, err := filepath.Abs(dbDir)
+	if err != nil {
+		return ""
+	}
 
 	for {
 		paths := []string{
@@ -96,7 +97,7 @@ func NewDBConf(dbDir, env string) (*DBConf, error) {
 		var err error
 		f, err = yaml.ReadFile(cfgFile)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("error loading config file: %s", err)
 		}
 	}
 
@@ -120,10 +121,7 @@ func NewDBConf(dbDir, env string) (*DBConf, error) {
 		drv = imprt[i+1:]
 	}
 
-	open, err := confGet(f, env, "open")
-	if err != nil {
-		return nil, err
-	}
+	open, _ := confGet(f, env, "open")
 
 	d := newDBDriver(drv, open)
 
@@ -159,8 +157,8 @@ func newDBDriver(name, open string) DBDriver {
 		OpenStr: open,
 	}
 
-	switch name {
-	case "postgres", "postgresql", "pq":
+	switch strings.ToLower(name) {
+	case "postgres":
 		d.Name = "postgres"
 		d.Import = "github.com/lib/pq"
 		d.Dialect = &PostgresDialect{}
@@ -178,7 +176,7 @@ func newDBDriver(name, open string) DBDriver {
 		d.Import = "github.com/go-sql-driver/mysql"
 		d.Dialect = &MySqlDialect{}
 
-	case "sqlite3", "go-sqlite3":
+	case "sqlite3":
 		d.Name = "sqlite3"
 		d.Import = "github.com/mattn/go-sqlite3"
 		d.Dialect = &Sqlite3Dialect{}
