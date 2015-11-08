@@ -7,14 +7,13 @@ import (
 )
 
 func TestBasics(t *testing.T) {
-
 	dbconf, err := NewDBConf("../../_example", "test")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	got := []string{dbconf.MigrationsDir, dbconf.Env, dbconf.Driver.Name, dbconf.Driver.OpenStr}
-	want := []string{"../../_example/migrations", "test", "postgres", "user=liam dbname=tester sslmode=disable"}
+	got := []string{dbconf.MigrationsDir, dbconf.Driver.Name, dbconf.Driver.OpenStr}
+	want := []string{"../../_example/migrations", "postgres", "user=liam dbname=tester sslmode=disable"}
 
 	for i, s := range got {
 		if s != want[i] {
@@ -24,7 +23,6 @@ func TestBasics(t *testing.T) {
 }
 
 func TestImportOverride(t *testing.T) {
-
 	dbconf, err := NewDBConf("../../_example", "customimport")
 	if err != nil {
 		t.Fatal(err)
@@ -38,7 +36,6 @@ func TestImportOverride(t *testing.T) {
 }
 
 func TestDriverSetFromEnvironmentVariable(t *testing.T) {
-
 	databaseUrlEnvVariableKey := "DB_DRIVER"
 	databaseUrlEnvVariableVal := "sqlite3"
 	databaseOpenStringKey := "DATABASE_URL"

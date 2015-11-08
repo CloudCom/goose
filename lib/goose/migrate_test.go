@@ -168,7 +168,6 @@ func testRunMigrationsOnDb(t *testing.T, driver DBDriver) {
 	conf := &DBConf{
 		Driver:        driver,
 		MigrationsDir: md,
-		Env:           "development",
 	}
 
 	db, err := OpenDBFromDBConf(conf)
@@ -218,7 +217,6 @@ func testRunMigrationsOnDb_missingMiddle(t *testing.T, driver DBDriver) {
 	conf := &DBConf{
 		Driver:        driver,
 		MigrationsDir: md,
-		Env:           "development",
 	}
 
 	db, err := OpenDBFromDBConf(conf)
@@ -293,7 +291,6 @@ func testRunMigrationsOnDb_upDownUp(t *testing.T, driver DBDriver) {
 	conf := &DBConf{
 		Driver:        driver,
 		MigrationsDir: md,
-		Env:           "development",
 	}
 
 	db, err := OpenDBFromDBConf(conf)

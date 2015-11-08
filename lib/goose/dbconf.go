@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/kylelemons/go-gypsy/yaml"
-	"github.com/lib/pq"
 )
 
 // DBDriver encapsulates the info needed to work with
@@ -24,27 +23,38 @@ type DBDriver struct {
 
 type DBConf struct {
 	MigrationsDir string
-	Env           string
 	Driver        DBDriver
 }
+
+var defaultDBConfYaml = `---
+migrationsDir: $DB_MIGRATIONS_DIR
+driver: $DB_DRIVER
+dialect: $DB_DIALECT
+open: $DB_DSN
+`
 
 // findDBConf looks for a dbconf.yaml file starting at the given directory and
 // walking up in the directory hierarchy.
 // Returns empty string if not found.
 func findDBConf(dbDir string) string {
-	dbDir, err := filepath.Abs(dbDir)
-	if err != nil {
-		return ""
-	}
+	//dbDir, err := filepath.Abs(dbDir)
+	//if err != nil {
+	//return ""
+	//}
 
 	for {
-		path := filepath.Join(dbDir, "dbconf.yaml")
-		if _, err := os.Stat(path); err == nil {
-			return path
+		paths := []string{
+			"dbconf.yaml",
+			"dbconf.yml",
+			filepath.Join("db", "dbconf.yaml"),
+			filepath.Join("db", "dbconf.yml"),
 		}
-		path = filepath.Join(dbDir, "dbconf.yml")
-		if _, err := os.Stat(path); err == nil {
-			return path
+
+		for _, path := range paths {
+			path = filepath.Join(dbDir, path)
+			if _, err := os.Stat(path); err == nil {
+				return path
+			}
 		}
 
 		nextDir := filepath.Dir(dbDir)
@@ -58,21 +68,40 @@ func findDBConf(dbDir string) string {
 	return ""
 }
 
+func confGet(f *yaml.File, env string, name string) (string, error) {
+	if env != "" {
+		if v, err := f.Get(fmt.Sprintf("%s.%s", env, name)); err == nil {
+			return os.ExpandEnv(v), nil
+		}
+	}
+	v, err := f.Get(name)
+	if err != nil {
+		return "", err
+	}
+	return os.ExpandEnv(v), nil
+}
+
 // extract configuration details from the given file
 func NewDBConf(dbDir, env string) (*DBConf, error) {
 	cfgFile := findDBConf(dbDir)
+	var f *yaml.File
 	if cfgFile == "" {
-		return nil, fmt.Errorf("could not find dbconf.yaml")
+		root, _ := yaml.Parse(strings.NewReader(defaultDBConfYaml))
+		f = &yaml.File{
+			Root: root,
+		}
+	} else {
+		dbDir = filepath.Dir(cfgFile)
+
+		var err error
+		f, err = yaml.ReadFile(cfgFile)
+		if err != nil {
+			return nil, err
+		}
 	}
-	dbDir = filepath.Dir(cfgFile)
+
 	migrationsDir := filepath.Join(dbDir, "migrations")
-
-	f, err := yaml.ReadFile(cfgFile)
-	if err != nil {
-		return nil, err
-	}
-
-	if md, err := f.Get(fmt.Sprintf("%s.migrationsDir", env)); err == nil {
+	if md, err := confGet(f, env, "migrationsDir"); err == nil {
 		if filepath.IsAbs(md) {
 			migrationsDir = md
 		} else {
@@ -80,36 +109,34 @@ func NewDBConf(dbDir, env string) (*DBConf, error) {
 		}
 	}
 
-	drv, err := f.Get(fmt.Sprintf("%s.driver", env))
+	drv, err := confGet(f, env, "driver")
 	if err != nil {
 		return nil, err
 	}
-	drv = os.ExpandEnv(drv)
+	var imprt string
+	// see if "driver" param is a full import path
+	if i := strings.LastIndex(drv, "/"); i != -1 {
+		imprt = drv
+		drv = imprt[i+1:]
+	}
 
-	open, err := f.Get(fmt.Sprintf("%s.open", env))
+	open, err := confGet(f, env, "open")
 	if err != nil {
 		return nil, err
-	}
-	open = os.ExpandEnv(open)
-
-	// Automatically parse postgres urls
-	if drv == "postgres" {
-
-		// Assumption: If we can parse the URL, we should
-		if parsedURL, err := pq.ParseURL(open); err == nil && parsedURL != "" {
-			open = parsedURL
-		}
 	}
 
 	d := newDBDriver(drv, open)
 
+	if imprt != "" {
+		d.Import = imprt
+	}
 	// allow the configuration to override the Import for this driver
-	if imprt, err := f.Get(fmt.Sprintf("%s.import", env)); err == nil {
+	if imprt, err := confGet(f, env, "import"); err == nil && imprt != "" {
 		d.Import = imprt
 	}
 
 	// allow the configuration to override the Dialect for this driver
-	if dialect, err := f.Get(fmt.Sprintf("%s.dialect", env)); err == nil {
+	if dialect, err := confGet(f, env, "dialect"); err == nil && dialect != "" {
 		d.Dialect = dialectByName(dialect)
 	}
 
@@ -119,7 +146,6 @@ func NewDBConf(dbDir, env string) (*DBConf, error) {
 
 	return &DBConf{
 		MigrationsDir: migrationsDir,
-		Env:           env,
 		Driver:        d,
 	}, nil
 }
@@ -128,14 +154,14 @@ func NewDBConf(dbDir, env string) (*DBConf, error) {
 // fields for drivers that we know about.
 // Further customization may be done in NewDBConf
 func newDBDriver(name, open string) DBDriver {
-
 	d := DBDriver{
 		Name:    name,
 		OpenStr: open,
 	}
 
 	switch name {
-	case "postgres":
+	case "postgres", "postgresql", "pq":
+		d.Name = "postgres"
 		d.Import = "github.com/lib/pq"
 		d.Dialect = &PostgresDialect{}
 
@@ -152,7 +178,8 @@ func newDBDriver(name, open string) DBDriver {
 		d.Import = "github.com/go-sql-driver/mysql"
 		d.Dialect = &MySqlDialect{}
 
-	case "sqlite3":
+	case "sqlite3", "go-sqlite3":
+		d.Name = "sqlite3"
 		d.Import = "github.com/mattn/go-sqlite3"
 		d.Dialect = &Sqlite3Dialect{}
 	}
