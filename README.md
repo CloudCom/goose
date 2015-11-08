@@ -202,7 +202,7 @@ A transaction is provided, rather than the DB instance directly, since goose als
 
 goose expects you to maintain a folder (typically called "db"), which contains the following:
 
-* a `dbconf.yml` file that describes the database configurations you'd like to use
+* a `dbconf.yaml` file that describes the database configurations you'd like to use
 * a folder called "migrations" which contains `.sql` and/or `.go` scripts that implement your migrations
 
 You may use the `-path` option to specify an alternate location for the folder containing your config and migrations.
@@ -219,17 +219,38 @@ Here, `development` specifies the name of the environment, and the `driver` and 
 
 You may include as many environments as you like, and you can use the `-env` command line option to specify which one to use. goose defaults to using an environment called `development`.
 
-goose will expand environment variables in the `open` element. For an example, see the Heroku section below.
+The configuration may also be environment-less, with all fields at the top level. For example:
+
+```yaml
+driver: postgres
+open: user=liam dbname=tester sslmode=disable
+```
+
+You can even use a mixture of both. If a field is not specified within an environment, goose will fall back to looking at the top level.
+
+You may also include environment variables in any field of the config. Specify them as `$MY_ENV_VAR` or `${MY_ENV_VAR}`.
+
+## Configless
+
+Goose can also run without a config file, by pulling all parameters from environment variables. This mode operates exactly as if you passed the following config file:
+
+```yaml
+migrationsDir: $DB_MIGRATIONS_DIR
+driver: $DB_DRIVER
+import: $DB_DRIVER_IMPORT
+dialect: $DB_DIALECT
+open: $DB_DSN
+```
 
 ## Other Drivers
 goose knows about some common SQL drivers, but it can still be used to run Go-based migrations with any driver supported by `database/sql`. An import path and known dialect are required.
 
-Currently, available dialects are: "postgres", "mysql", or "sqlite3"
+Currently, available dialects are: "postgres", "mysql", "sqlite3", and "redshift"
 
 To run Go-based migrations with another driver, specify its import path and dialect, as shown below.
 
 ```yml
-customdriver:
+myenv:
     driver: custom
     open: custom open string
     import: github.com/custom/driver
