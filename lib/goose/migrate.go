@@ -7,7 +7,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -35,30 +34,10 @@ const (
 	DirectionUp   = Direction(true)
 )
 
-var templatesDir = func() string {
-	if _, file, _, ok := runtime.Caller(0); ok {
-		return filepath.Join(filepath.Dir(file), "templates")
-	}
-	// runtime.Caller() failed. That's weird...
-	// Try `./templates`, we'll either get lucky, or `template.Must()` will blow
-	// up for us.
-	return "templates"
-}()
-
-//TODO templates should be loaded by the client.
-// Not everyone using the lib needs/has them.
-var templates *template.Template
-
-func getTemplate(name string) (*template.Template, error) {
-	if templates == nil {
-		var err error
-		templates, err = template.ParseGlob(filepath.Join(templatesDir, "*"))
-		if err != nil {
-			return nil, err
-		}
-	}
-	return templates.Lookup(name), nil
-}
+//go:generate sh -c "go get github.com/jteeuwen/go-bindata/go-bindata && go-bindata -pkg goose -o templates.go -nometadata -nocompress ./templates && gofmt -w templates.go"
+var goMigrationDriverTemplate = template.Must(template.New("").Parse(string(_templatesMigrationMainGoTmpl)))
+var goMigrationTemplate = template.Must(template.New("").Parse(string(_templatesMigrationGoTmpl)))
+var sqlMigrationTemplate = template.Must(template.New("").Parse(string(_templatesMigrationSqlTmpl)))
 
 type Migration struct {
 	Version   int64
@@ -416,12 +395,9 @@ func CreateMigration(name, migrationType, dir string, t time.Time) (path string,
 
 	var tmpl *template.Template
 	if migrationType == "sql" {
-		tmpl, err = getTemplate("migration.sql.tmpl")
+		tmpl = sqlMigrationTemplate
 	} else {
-		tmpl, err = getTemplate("migration.go.tmpl")
-	}
-	if err != nil {
-		return "", err
+		tmpl = goMigrationTemplate
 	}
 
 	path, err = writeTemplateToFile(fpath, tmpl, timestamp)

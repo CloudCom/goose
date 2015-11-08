@@ -66,12 +66,7 @@ func runGoMigration(conf *DBConf, path string, version int64, direction Directio
 		InsertStmt: conf.Driver.Dialect.insertVersionSql(),
 	}
 
-	tmpl, err := getTemplate("migration-main.go.tmpl")
-	if err != nil {
-		log.Fatal(e)
-	}
-
-	main, e := writeTemplateToFile(filepath.Join(d, "goose_main.go"), tmpl, td)
+	main, e := writeTemplateToFile(filepath.Join(d, "goose_main.go"), goMigrationDriverTemplate, td)
 	if e != nil {
 		log.Fatal(e)
 	}

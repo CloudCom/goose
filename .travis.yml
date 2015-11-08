@@ -41,6 +41,8 @@ script:
   - test -z "$(gofmt -d . | tee /dev/stderr)"
   # check for possible uh ohs
   - go vet ./...
+  # make sure generated files have already been committed
+  - go generate ./... && test -z "$(git status --porcelain)"
   # run tests checking for race conditions
   - go list ./... | xargs -n 1 go test -v -race -coverprofile=>(sed -e '1!{/^mode:/d}' > .coverprofile)
 
