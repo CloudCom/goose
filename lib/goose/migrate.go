@@ -95,7 +95,7 @@ func RunMigrationsOnDb(conf *DBConf, migrationsDir string, target int64, db *sql
 				continue
 			}
 		} else {
-			if m.Version < target {
+			if m.Version <= target {
 				continue
 			}
 			if !m.IsApplied {

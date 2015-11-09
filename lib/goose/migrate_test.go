@@ -281,6 +281,59 @@ func TestRunMigrationsOnDb_missingMiddle_redshift(t *testing.T) {
 	testRunMigrationsOnDb_missingMiddle(t, getRedshiftDriver(t))
 }
 
+func testRunMigrationsOnDb_down(t *testing.T, driver DBDriver) {
+	md, mdCleanup := setupMigrationsDir(map[string][2]string{
+		"20010203040506_setup.sql": [2]string{"CREATE TABLE test(value VARCHAR(20));", "DROP TABLE test;"},
+		"20010203040507_one.sql":   [2]string{"INSERT INTO test(value) VALUES('one');", "DELETE FROM test WHERE value = 'one';"},
+		"20010203040508_two.sql":   [2]string{"INSERT INTO test(value) VALUES('two');", "DELETE FROM test WHERE value = 'two';"},
+	})
+	defer mdCleanup()
+	conf := &DBConf{
+		Driver:        driver,
+		MigrationsDir: md,
+	}
+
+	db, err := OpenDBFromDBConf(conf)
+	require.NoError(t, err)
+
+	db.Exec("DROP TABLE goose_db_version")
+	db.Exec("DROP TABLE test")
+
+	// up
+	err = RunMigrationsOnDb(conf, conf.MigrationsDir, 20010203040508, db)
+	require.NoError(t, err)
+
+	// down
+	err = RunMigrationsOnDb(conf, conf.MigrationsDir, 20010203040507, db)
+	require.NoError(t, err)
+
+	rows, err := db.Query("SELECT value FROM test")
+	require.NoError(t, err)
+	defer rows.Close()
+	var values []string
+	for rows.Next() {
+		var value string
+		err := rows.Scan(&value)
+		require.NoError(t, err)
+		values = append(values, value)
+	}
+
+	assert.Len(t, values, 1)
+	assert.Contains(t, values, "one")
+}
+func TestRunMigrationsOnDb_down_sqlite3(t *testing.T) {
+	testRunMigrationsOnDb_down(t, getSqlite3Driver(t))
+}
+func TestRunMigrationsOnDb_down_mysql(t *testing.T) {
+	testRunMigrationsOnDb_down(t, getMysqlDriver(t))
+}
+func TestRunMigrationsOnDb_down_postgres(t *testing.T) {
+	testRunMigrationsOnDb_down(t, getPostgresDriver(t))
+}
+func TestRunMigrationsOnDb_down_redshift(t *testing.T) {
+	testRunMigrationsOnDb_down(t, getRedshiftDriver(t))
+}
+
 func testRunMigrationsOnDb_upDownUp(t *testing.T, driver DBDriver) {
 	md, mdCleanup := setupMigrationsDir(map[string][2]string{
 		"20010203040506_setup.sql": [2]string{"CREATE TABLE test(value VARCHAR(20));", "DROP TABLE test;"},
