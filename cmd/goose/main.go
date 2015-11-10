@@ -32,14 +32,16 @@ var commands = []*Command{
 }
 
 func main() {
-
+	os.Exit(imain())
+}
+func imain() int {
 	flag.Usage = usage
 	flag.Parse()
 
 	args := flag.Args()
 	if len(args) == 0 || args[0] == "-h" {
 		flag.Usage()
-		return
+		return 0
 	}
 
 	var cmd *Command
@@ -54,10 +56,11 @@ func main() {
 	if cmd == nil {
 		fmt.Printf("error: unknown command %q\n", name)
 		flag.Usage()
-		os.Exit(1)
+		return 1
 	}
 
 	cmd.Exec(args[1:])
+	return 0
 }
 
 func usage() {
