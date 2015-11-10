@@ -24,7 +24,6 @@ before_install:
 
 install:
   - go get -t -d ./...
-  - go build ./...
 
 before_script:
   - psql -U postgres -c 'CREATE DATABASE goose'
@@ -43,6 +42,7 @@ script:
   - go vet ./...
   # make sure generated files have already been committed
   - go generate ./... && test -z "$(git status --porcelain)"
+  - go build -i ./...
   # run tests checking for race conditions
   - go list ./... | xargs -n 1 go test -v -race -coverprofile=>(sed -e '1!{/^mode:/d}' > .coverprofile)
 
