@@ -30,6 +30,11 @@ before_script:
   - export POSTGRES_DATABASE_DSN='host=localhost sslmode=disable user=postgres dbname=goose'
   - mysql -u root -e 'CREATE DATABASE goose'
   - export MYSQL_DATABASE_DSN='root@tcp(localhost:3306)/goose'
+  - |
+    if [[ -n "$REDSHIFT_DATABASE_DSN" ]]; then
+      export "$(go run travis.setup_redshift.go setup)" && \
+        trap "go run travis.setup_redshift.go destroy" EXIT
+    fi
 
 script:
   # check for potentially complex functions
