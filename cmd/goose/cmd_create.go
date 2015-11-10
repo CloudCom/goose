@@ -35,7 +35,7 @@ func createRun(cmd *Command, args ...string) {
 		log.Fatal(err)
 	}
 
-	if err = os.MkdirAll(conf.MigrationsDir, 0777); err != nil {
+	if err = os.MkdirAll(conf.MigrationsDir, 0750); err != nil {
 		log.Fatal(err)
 	}
 
