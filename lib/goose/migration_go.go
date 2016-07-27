@@ -62,7 +62,7 @@ func runGoMigration(conf *DBConf, path string, version int64, direction Directio
 		Import:     conf.Driver.Import,
 		Conf:       sb.String(),
 		Direction:  direction,
-		Func:       fmt.Sprintf("%v_%v", strings.ToTitle(direction.String()), version),
+		Func:       fmt.Sprintf("%v_%v", strings.Title(direction.String()), version),
 		InsertStmt: conf.Driver.Dialect.insertVersionSql(),
 	}
 
